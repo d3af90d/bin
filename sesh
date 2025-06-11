@@ -1,0 +1,33 @@
+#!/usr/bin/expect -f
+
+# ------------------------------------------------------------------------------
+# @d3af90d 2025-06-01 21:11.17
+#          2025-06-11 01:16.28 (last edit)
+#
+# sesh - [se]ssion [sh]ell
+# ./sesh [SESSION_NAME]
+#
+# I wanted a way to start some sort of shell session in which every command
+#  run and its output get saved for later retrieving.
+# See paste-sesh to see how the saved output gets used.
+# ------------------------------------------------------------------------------
+
+# get the name of the session from the cli parameter
+set session_name [lindex $argv 0]
+# import env variable
+set xdg_data_home $env(XDG_DATA_HOME)
+# define the timestamp for the filename
+set timestamp [clock format [clock seconds] -format "%Y-%m-%d_%H:%M:%S"]
+# define the logfile filename
+set logfile "${xdg_data_home}/sesh/sesh-${session_name}-${timestamp}.log"
+# activate logging by append
+log_file -a $logfile
+
+spawn bash
+# set a cooler PS1. love this escape hell, huh? 💀 i wasted more time finding the right combination of quotes and backslashes than on the rest. u know it.
+send "PS1='\\\[\\e\[38;5;247;2m\\\]\\w\\\[\\e\[0m\\\] \\\\$ \\\[\\e\[91;103m\\\]REC\\\[\\e\[0m\\\] \\\[\\e\[94;102m\\\]${session_name}\\\[\\e\[0m\\\] \\t '\r"
+# log every command with a shell trap
+send "trap 'echo \"\[LOG-MINE\] \[${session_name}\] \$(date \"+%F_%T\") \$BASH_COMMAND\" >> ${logfile}' DEBUG\r"
+send "clear\r"
+# start the interactive session
+interact
