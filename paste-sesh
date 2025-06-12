@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# @d3af90d 2025-06-01 22:04.33
+#          2025-06-12 22:43.37 (last edit)
+#
+# paste-sesh - [paste-se]ssion[sh]ell
+# ./paste-sesh
+#
+# This script is used to copy into the clipboard a command and associated output
+#  saved while running a `sesh` script session.
+#
+# Dependencies:
+#   ansifilter (https://gitlab.com/saalen/ansifilter)
+#   fuzzel (or any picker you want) (https://codeberg.org/dnkl/fuzzel)
+#   awk
+#   grep
+#   konsole (or any other command that allows you to open your editor of choice)
+#   wl-copy (or any program you use to manage your system clipboard)
+# ------------------------------------------------------------------------------
+
+SESH_DIR="${XDG_DATA_HOME}/sesh"
+SESH_TMP_FILE="/tmp/sesh-buf"
+# choose a command saved from a session (the lines containing the string `LOG-MINE` in the prompt)
+CHOSEN="$(cat ${SESH_DIR}/sesh-* | ansifilter | grep '^\[LOG-MINE\]' | grep -v 'printf' | sort -t ' ' -k 3 -r | fuzzel --dmenu)"
+
+if [[ ! -z "${CHOSEN}" ]]; then
+    # extract the command string from the chosen line
+    COMMAND="\$ $(echo $CHOSEN | cut -d' ' -f 4-)"
+    # get all the lines between the chosen command and the next one, except the last line
+    OUTPUT=$(cat ${SESH_DIR}/sesh-* | ansifilter | awk -v chosen="${CHOSEN}" '
+    found && /LOG-MINE/ {found=0; next}
+    found {
+        if (prev) print prev
+        prev = $0
+    }
+    $0 == chosen { found=1; next}
+    ')
+    # copy the command and its output to the cliboard
+    echo -e "${COMMAND}\n${OUTPUT}" | wl-copy
+
+# we choose nothing at the first prompt because the command we are looking for does not have 
+# the prompt with the `LOG-MINE` string in it. maybe we are searching for a command run in a
+# dumb shell, reverse shell or any other shell that is not the original one that started the sesh session
+else
+    # present to the users all the lines saved in the session log
+    CHOSEN="$(cat ${SESH_DIR}/sesh-* | ansifilter | fuzzel --dmenu)"
+    # get the 100 lines following the chosen one
+    cat ${SESH_DIR}/sesh-* | ansifilter | grep -A 100 -F "${CHOSEN}" > ${SESH_TMP_FILE}
+    # open the saved lines in an editor so the user can select and manually copy to the clipboard
+    # i have no way to know when the command output finishes, so i let the user copy the output manually
+    konsole -e "nvim ${SESH_TMP_FILE}"
+fi
